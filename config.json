@@ -1,0 +1,26 @@
+{
+    "api_keys": {
+        "OPENAI_API_KEY": ""
+    },
+    "models": {
+        "translation": "gpt-3.5-turbo",
+        "embedding": "ada-002-embeddings",
+        "analysis": "",
+        "editing": ""
+    },
+    "prompts": {
+        "system": "",
+        "translation_prefix": "",
+        "translation_suffix": "",
+        "analysis_prompt": "",
+        "editing_prompt": ""
+    },
+    "input": {
+        "path": "./input/text",
+        "type": ".txt"
+    },
+    "output": {
+        "path": "./output/text",
+        "type": ".txt"
+    }
+}
