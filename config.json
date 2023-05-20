@@ -4,7 +4,7 @@
     },
     "models": {
         "translation": "gpt-3.5-turbo",
-        "embedding": "ada-002-embeddings",
+        "embedding": "text-embedding-ada-002",
         "analysis": "",
         "editing": ""
     },
@@ -17,7 +17,11 @@
     },
     "input": {
         "path": "./input/text",
-        "type": ".txt"
+        "type": ".txt",
+        "options": {
+            "split_on_double_newlines": false,
+            "split_token_threshold": 50
+        }
     },
     "output": {
         "path": "./output/text",
@@ -25,6 +29,9 @@
             "enabled": true
         },
         ".pdf": {
+            "enabled": false
+        },
+        "metadata": {
             "enabled": false
         }
     }
