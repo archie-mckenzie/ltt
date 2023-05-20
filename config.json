@@ -21,6 +21,11 @@
     },
     "output": {
         "path": "./output/text",
-        "type": ".txt"
+        ".txt": {
+            "enabled": true
+        },
+        ".pdf": {
+            "enabled": false
+        }
     }
 }
