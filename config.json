@@ -9,22 +9,24 @@
         "editing": ""
     },
     "prompts": {
-        "system": "",
-        "translation_prefix": "",
+        "system": "You are an expert translator who translates large texts broken up into small passages.",
+        "translation_prefix": "Translate the following passage into English:\n\n",
         "translation_suffix": "",
-        "analysis_prompt": "",
         "editing_prompt": ""
     },
     "input": {
-        "path": "./input/text",
+        "path": "./input/80_days_chapter_one",
         "type": ".txt",
         "options": {
             "split_on_double_newlines": false,
-            "split_token_threshold": 50
+            "split_token_threshold": 100,
+            "max_segment_tokens": 350,
+            "max_context_injection_tokens": 1050,
+            "context_queue_size": 3
         }
     },
     "output": {
-        "path": "./output/text",
+        "path": "./output/output",
         ".txt": {
             "enabled": true
         },
@@ -34,5 +36,9 @@
         "metadata": {
             "enabled": false
         }
+    },
+    "costs": {
+        "notification_interval": 1,
+        "max_cost_cap": 100
     }
 }
