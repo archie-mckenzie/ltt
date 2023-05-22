@@ -5,13 +5,14 @@
     "models": {
         "translation": "gpt-3.5-turbo",
         "embedding": "text-embedding-ada-002",
-        "analysis": "",
         "editing": ""
     },
     "prompts": {
         "system": "You are an expert translator who translates large texts broken up into small passages.",
-        "translation_prefix": "Translate the following passage into English:\n\n",
+        "initial": "",
+        "translation_prefix": "Translate the following passage into English:",
         "translation_suffix": "",
+        "queue_structured_context_injection": "Here's what came immediately before in the text you are translating:",
         "editing_prompt": ""
     },
     "input": {
@@ -22,7 +23,8 @@
             "split_token_threshold": 100,
             "max_segment_tokens": 350,
             "max_context_injection_tokens": 1050,
-            "context_queue_size": 3
+            "context_queue_size": 3,
+            "context_embedding_size": 1
         }
     },
     "output": {
@@ -40,5 +42,9 @@
     "costs": {
         "notification_interval": 1,
         "max_cost_cap": 100
+    },
+    "advanced": {
+        "outlier_threshold": 2.7,
+        "minimum_similarity": 0.75
     }
 }

@@ -13,6 +13,7 @@ prompts = config["prompts"]
 input = config["input"]
 options = input["options"]
 output = config["output"]
+advanced = config["advanced"]
 
 # Set up environment variables
 from dotenv import load_dotenv
@@ -42,6 +43,9 @@ nltk.download('punkt')
 import time
 from datetime import datetime
 
+# NumPy, for calculating similarity between vectors
+import numpy as np
+
 # ./scripts
 from scripts import calculate_costs, read_input, segment_text
 
@@ -62,84 +66,108 @@ projected_costs = calculate_costs.estimate_costs(segments, models, options)
 
 # ----- TRANSLATION HELPER FUNCTIONS ----- #
 
+allowed_context_injection_tokens = options["max_context_injection_tokens"] - len(enc.encode(prompts["system"])) - len(enc.encode(prompts["initial"]))
+
 def guess_time_remaining(start_time, i, segments_length):
     time_elapsed = time.time() - start_time
     time_per_segment = time_elapsed / (i + 1)
     return f"approximately {int(round((time_per_segment * (segments_length - i - 1)), 0))} seconds remaining..."
 
-def retry_until_successful(function, t):
+def retry_until_successful(t, function, *args, **kwargs):
     try:
-        result = function
-        return result
+        return function(*args, **kwargs)
     except:
-        print(f"Error. Waiting {t} seconds and trying again.")
+        print(f"Error! Waiting for {t} seconds then trying again.")
         time.sleep(t)
-        return retry_until_successful(function, t * 2)
+        return retry_until_successful(t * 2, function, *args, **kwargs)
 
-system_message = {"role": "system", "content": prompts["system"]}
-allowed_context_injection_tokens = options["max_context_injection_tokens"] - len(enc.encode(system_message["content"]))
+def formulate_prompt(i):
 
-def formulate_messages(messages, latest_segment):
-    if (calculate_costs.calculate_tokens_in_messages(messages) > options["max_context_injection_tokens"]):
-        rebuilt_messages = []
-        total_tokens = 0
-        for (i) in range(len(messages) - 1, len(messages) - (2 * options["context_queue_size"]) - 1, -1):
-            if (messages[i]["role"] == ["assistant"]):
-                if total_tokens + len(enc.encode(messages[i]["content"])) + len(enc.encode(messages[i-1]["content"])) <= allowed_context_injection_tokens:
-                    rebuilt_messages.insert(0, messages[i-1])
-                    rebuilt_messages.insert(0, messages[i])
-                else:
-                    break
-        rebuilt_messages.insert(0, system_message)
-        messages = rebuilt_messages
-    messages.append(
-        {
-                "role": "user", 
-                "content": prompts["translation_prefix"] + latest_segment + prompts["translation_suffix"]
-        }
-    )
-    return messages
+    # Translation Prompt
+    prompt = f'{prompts["translation_prefix"]}\n\n{segments[i]}\n\n{prompts["translation_suffix"]}'
+
+    included_indeces = []
+    total_tokens = 0
+ 
+    # Queue-Structure Context Injection
+    for j in range(i - 1, max(i - options["context_queue_size"], -1), -1):
+        current_tokens = len(enc.encode(segments[j]))
+        if total_tokens + current_tokens <= allowed_context_injection_tokens:
+            included_indeces.insert(0, j)
+            total_tokens += current_tokens
+    if (len(included_indeces) > 0):
+        prompt = f'{prompts["queue_structured_context_injection"]}\n\n{" ".join([segments[j] for j in included_indeces])}\n\n{prompt}'
+
+    # Embedding-Based Context Injection
+    if (models["embedding"]):
+        similarities = []
+        alpha = np.array(embeddings[i])
+        for j in range(i):
+            if j in included_indeces:
+                similarities.append(0.0)
+            else:
+                beta = np.array(embeddings[j]) 
+                # Calculate the dot product of the two vectors
+                dot_product = np.dot(alpha, beta)
+                # Calculate the norm (length) of each vector
+                alpha_norm = np.linalg.norm(alpha)
+                beta_norm = np.linalg.norm(beta)
+                # Calculate the cosine similarity between the two vectors
+                similarities.append(dot_product / (alpha_norm * beta_norm))
+        if (len(similarities) > 0):
+            threshold = np.mean(similarities) + (advanced["outlier_threshold"] * np.std(similarities))
+            champion_indeces = []
+            if threshold >= advanced["minimum_similarity"]:
+                for j, similarity in enumerate(similarities):
+                    if similarity >= threshold:
+                        champion_indeces.insert(0, j)
+                if (len(champion_indeces) > 0):
+                    prompt = f'{prompts["embedding_similarity_context_injection"]}\n\n{" ".join([segments[j] for j in champion_indeces])}\n\n{prompt}'
+
+    print(prompt if prompts["initial"] == "" else f'{prompts["initial"]}\n\n{prompt}')
+    return prompt if prompts["initial"] == "" else f'{prompts["initial"]}\n\n{prompt}'
+
+    
+# ----- EMBEDDING ----- #
+
+embeddings = []
+print("----- START OF SENTENCE EMBEDDING -----")
+for i, segment in enumerate(segments):
+    embeddings.append(retry_until_successful(2, openai.Embedding.create, model=models["embedding"], input=segment)["data"][0]["embedding"])
+    print(f"Embedded segment {i}/{len(segments)}")
+print("----- END OF SENTENCE EMBEDDING -----")
 
 # ----- TRANSLATION ----- #
 
 translated_segments = []
-messages = [system_message]
 
-segments_length = len(segments)
 start_time = time.time()
 
 for i, segment in enumerate(segments):
 
-    messages = formulate_messages(messages, segment)
+    messages = [
+        {"role": "system", "content": prompts["system"]},
+        {"role": "user", "content": formulate_prompt(i)}
+    ]
 
-    completion = retry_until_successful(openai.ChatCompletion.create(
-            model=models["translation"],
-            messages=messages
-    ), 2)
+    translation = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages)["choices"][0]["message"]["content"]
     
-    translation = completion.choices[0].message.content
-
-    embedding_response = openai.Embedding.create(
-        input = translation,
-        model = models["embedding"]
-    )
-
     translated_segments.append({
         "original": segment,
         "translation": translation,
-        "embedding": (embedding_response['data'][0]['embedding'])
+        "embedding": embeddings[i]
     })
-
-    messages.append(completion.choices[0].message)
 
     print("-----")
     print(translation + "\n")
     print(datetime.now().strftime("%H:%M:%S"))
-    print(f"{str(i + 1)}/{str(segments_length)}")
-    print(guess_time_remaining(start_time, i, segments_length))
+    print(f"{str(i + 1)}/{str(len(segments))}")
+    print(guess_time_remaining(start_time, i, len(segments)))
     print("-----")
 
 # ----- EDITING ----- #
+
+
 
 # ----- WRITING ----- #
 
