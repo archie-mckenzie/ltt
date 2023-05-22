@@ -13,6 +13,7 @@
         "translation_prefix": "Translate the following passage into English:",
         "translation_suffix": "",
         "queue_structured_context_injection": "Here's what came immediately before in the text you are translating:",
+        "embedding_similarity_context_injection": "Similar passages previously found in the text you are translating:",
         "editing_prompt": ""
     },
     "input": {
