@@ -111,10 +111,8 @@ def formulate_prompt(i):
             beta_norm = np.linalg.norm(beta)
             # Calculate the cosine similarity between the two vectors
             similarities.append(dot_product / (alpha_norm * beta_norm))
-        print(f"Similarities: {similarities}")
         if (len(similarities) > 0):
             threshold = np.mean(similarities) + (advanced["outlier_threshold"] * np.std(similarities))
-            print(f"Threshold: {threshold}")
             champion_indeces = []
             if threshold >= advanced["minimum_similarity"]:
                 for j, similarity in enumerate(similarities):
@@ -125,8 +123,7 @@ def formulate_prompt(i):
                             total_tokens += current_tokens
                 if (len(champion_indeces) > 0):
                     prompt = f'{prompts["embedding_similarity_context_injection"]}\n\n{" ".join([segments[j] for j in champion_indeces])}\n\n{prompt}'
-
-    print(prompt if prompts["initial"] == "" else f'{prompts["initial"]}\n\n{prompt}')
+    
     return prompt if prompts["initial"] == "" else f'{prompts["initial"]}\n\n{prompt}'
 
     
@@ -164,6 +161,10 @@ for i, segment in enumerate(segments):
 
 finalized_segments = []
 
+# Loop through translated segments
+# At least two at a time, potentially cover the same segment twice
+# So that all inter-segment gaps are joined
+
 # ----- WRITING ----- #
 
 # For .txt file
@@ -173,3 +174,7 @@ if (output[".txt"]["enabled"]):
         if (i != 0):
             file.write(f' {segment}')
         else: file.write(segment)
+
+# For .pdf file
+
+# For metadata.json
