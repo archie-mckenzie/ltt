@@ -14,7 +14,7 @@
         "translation_suffix": "",
         "queue_structured_context_injection": "Here's what came immediately before in the text you are translating:",
         "embedding_similarity_context_injection": "Similar passages previously found in the text you are translating:",
-        "editing_prompt": ""
+        "editing_prompt": "Write the following passage with grammatical and formatting errors fixed. Add paragraph breaks, make sure quotation marks are in the right place, and so on. You must write the passage exactly as it is, aside from fixing the grammar issues. Passage:"
     },
     "input": {
         "path": "./input/80_days_chapter_one",
@@ -45,7 +45,7 @@
         "max_cost_cap": 100
     },
     "advanced": {
-        "outlier_threshold": 2.7,
+        "outlier_threshold": 2,
         "minimum_similarity": 0.75
     }
 }

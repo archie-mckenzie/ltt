@@ -90,7 +90,7 @@ def formulate_prompt(i):
     total_tokens = 0
  
     # Queue-Structure Context Injection
-    for j in range(i - 1, max(i - options["context_queue_size"], -1), -1):
+    for j in range(i - 1, max(i - options["context_queue_size"] - 1, -1), -1):
         current_tokens = len(enc.encode(segments[j]))
         if total_tokens + current_tokens <= allowed_context_injection_tokens:
             included_indeces.insert(0, j)
@@ -103,24 +103,26 @@ def formulate_prompt(i):
         similarities = []
         alpha = np.array(embeddings[i])
         for j in range(i):
-            if j in included_indeces:
-                similarities.append(0.0)
-            else:
-                beta = np.array(embeddings[j]) 
-                # Calculate the dot product of the two vectors
-                dot_product = np.dot(alpha, beta)
-                # Calculate the norm (length) of each vector
-                alpha_norm = np.linalg.norm(alpha)
-                beta_norm = np.linalg.norm(beta)
-                # Calculate the cosine similarity between the two vectors
-                similarities.append(dot_product / (alpha_norm * beta_norm))
+            beta = np.array(embeddings[j]) 
+            # Calculate the dot product of the two vectors
+            dot_product = np.dot(alpha, beta)
+            # Calculate the norm (length) of each vector
+            alpha_norm = np.linalg.norm(alpha)
+            beta_norm = np.linalg.norm(beta)
+            # Calculate the cosine similarity between the two vectors
+            similarities.append(dot_product / (alpha_norm * beta_norm))
+        print(f"Similarities: {similarities}")
         if (len(similarities) > 0):
             threshold = np.mean(similarities) + (advanced["outlier_threshold"] * np.std(similarities))
+            print(f"Threshold: {threshold}")
             champion_indeces = []
             if threshold >= advanced["minimum_similarity"]:
                 for j, similarity in enumerate(similarities):
-                    if similarity >= threshold:
-                        champion_indeces.insert(0, j)
+                    if similarity >= threshold and j not in included_indeces:
+                        current_tokens = len(enc.encode(segments[j]))
+                        if total_tokens + current_tokens <= allowed_context_injection_tokens:
+                            champion_indeces.insert(0, j)
+                            total_tokens += current_tokens
                 if (len(champion_indeces) > 0):
                     prompt = f'{prompts["embedding_similarity_context_injection"]}\n\n{" ".join([segments[j] for j in champion_indeces])}\n\n{prompt}'
 
@@ -131,11 +133,12 @@ def formulate_prompt(i):
 # ----- EMBEDDING ----- #
 
 embeddings = []
-print("----- START OF SENTENCE EMBEDDING -----")
+
+print("----- START OF SEGMENT EMBEDDING -----")
 for i, segment in enumerate(segments):
     embeddings.append(retry_until_successful(2, openai.Embedding.create, model=models["embedding"], input=segment)["data"][0]["embedding"])
-    print(f"Embedded segment {i}/{len(segments)}")
-print("----- END OF SENTENCE EMBEDDING -----")
+    print(f"Embedded segment {i + 1}/{len(segments)}")
+print("----- END OF SEGMENT EMBEDDING -----")
 
 # ----- TRANSLATION ----- #
 
@@ -144,20 +147,12 @@ translated_segments = []
 start_time = time.time()
 
 for i, segment in enumerate(segments):
-
     messages = [
         {"role": "system", "content": prompts["system"]},
         {"role": "user", "content": formulate_prompt(i)}
     ]
-
     translation = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages)["choices"][0]["message"]["content"]
-    
-    translated_segments.append({
-        "original": segment,
-        "translation": translation,
-        "embedding": embeddings[i]
-    })
-
+    translated_segments.append(translation)
     print("-----")
     print(translation + "\n")
     print(datetime.now().strftime("%H:%M:%S"))
@@ -167,14 +162,14 @@ for i, segment in enumerate(segments):
 
 # ----- EDITING ----- #
 
-
+finalized_segments = []
 
 # ----- WRITING ----- #
 
 # For .txt file
 if (output[".txt"]["enabled"]):
     file = open(f'{output["path"]}.txt', "w")
-    for i, object in enumerate(translated_segments):
+    for i, segment in enumerate(finalized_segments):
         if (i != 0):
-            file.write(f' {object["translation"]}')
-        else: file.write(object["translation"])
+            file.write(f' {segment}')
+        else: file.write(segment)
