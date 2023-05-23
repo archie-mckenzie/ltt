@@ -35,7 +35,7 @@ def estimate_costs(segments, models, options):
     try:
         translation_costs = 0
         for segment in segments:
-            translation_costs += (cost_menu[models["translation"]] * (len(enc.encode(segment)) + options["max_context_injection_tokens"]))
+            translation_costs += (cost_menu[models["translation"]] * (len(enc.encode(segment)) + options["max_context_injection_tokens"]) + (cost_menu[models["translation"]] * len(enc.encode(segment))))
         translation_costs = round(translation_costs, 3)
     except KeyError:
         translation_costs = 0
@@ -57,7 +57,7 @@ def estimate_costs(segments, models, options):
     try:
         editing_costs = 0
         for segment in segments:
-            editing_costs += (cost_menu[models["editing"]] * len(enc.encode(segment)))
+            editing_costs += (cost_menu[models["editing"]] * 2 * len(enc.encode(segment)))
         editing_costs = round(editing_costs, 3)
     except KeyError:
         editing_costs = 0

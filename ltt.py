@@ -129,13 +129,13 @@ def formulate_prompt(i):
     
 # ----- EMBEDDING ----- #
 
-embeddings = []
-
-print("----- START OF SEGMENT EMBEDDING -----")
-for i, segment in enumerate(segments):
-    embeddings.append(retry_until_successful(2, openai.Embedding.create, model=models["embedding"], input=segment)["data"][0]["embedding"])
-    print(f"Embedded segment {i + 1}/{len(segments)}")
-print("----- END OF SEGMENT EMBEDDING -----")
+if (models["embedding"]):
+    embeddings = []
+    print("----- START OF SEGMENT EMBEDDING -----")
+    for i, segment in enumerate(segments):
+        embeddings.append(retry_until_successful(2, openai.Embedding.create, model=models["embedding"], input=segment)["data"][0]["embedding"])
+        print(f"Embedded segment {i + 1}/{len(segments)}")
+    print("----- END OF SEGMENT EMBEDDING -----")
 
 # ----- TRANSLATION ----- #
 
@@ -143,6 +143,7 @@ translated_segments = []
 
 start_time = time.time()
 
+print("----- START OF TRANSLATION -----")
 for i, segment in enumerate(segments):
     messages = [
         {"role": "system", "content": prompts["system"]},
@@ -156,25 +157,94 @@ for i, segment in enumerate(segments):
     print(f"{str(i + 1)}/{str(len(segments))}")
     print(guess_time_remaining(start_time, i, len(segments)))
     print("-----")
+print("----- END OF TRANSLATION -----")
 
 # ----- EDITING ----- #
 
-finalized_segments = []
+paragraphs = []
 
-# Loop through translated segments
-# At least two at a time, potentially cover the same segment twice
-# So that all inter-segment gaps are joined
+start_time = time.time()
+
+# Feed many translated segments at once into it (as many as the limit allows), ask it to use double newlines to denote new paragraphs
+# Split the model output along double newlines and store it in paragraphs
+# Integrate the last paragraph into the next prompt so that all inter-segment gaps are joined
+
+if (models["editing"]):
+    print("----- START OF EDITING -----")
+    i = 0
+    current_prompt = f'{prompts["editing"]}\n\n'
+    current_tokens = 0
+    while i <= len(translated_segments) - 1:
+        if len(paragraphs) > 1:
+            current_prompt += f'{paragraphs[len(paragraphs) - 1]}\n\n'
+            current_tokens += len(enc.encode(paragraphs[len(paragraphs) - 1]))
+            paragraphs = paragraphs[:-1]
+        while current_tokens + len(enc.encode(translated_segments[i])) <= options["max_editing_tokens"] - len(enc.encode(prompts["editing"])):
+            print(f'Current tokens: {current_tokens}')
+            print(f'Max tokens: {options["max_editing_tokens"] - len(enc.encode(prompts["editing"]))}')
+            if (current_prompt[len(current_prompt) - 1]) == "\n":
+                current_prompt += translated_segments[i]
+            else: 
+                current_prompt += f' {translated_segments[i]}'
+            current_tokens += len(enc.encode(translated_segments[i]))
+            i += 1
+            if i >= len(translated_segments) - 1: break
+        print(f'Current tokens: {current_tokens}')
+        messages = [
+            {"role": "system", "content": prompts["system"]},
+            {"role": "user", "content": current_prompt}
+        ]
+        print("-----")
+        print(current_prompt)
+        print("-----")
+        edit = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages)["choices"][0]["message"]["content"]
+        for j, paragraph in enumerate(edit.split('\n\n')):
+            if (j != 0): print(f'\n{paragraph}')
+            else: print(paragraph)
+            paragraphs.append(paragraph)
+        current_prompt = f'{prompts["editing"]}\n\n'
+        current_tokens = 0
+        print("-----")
+        print(datetime.now().strftime("%H:%M:%S"))
+        print(f"{str(i)}/{str(len(segments))}")
+        print(guess_time_remaining(start_time, i - 1, len(translated_segments)))
+        print("-----")
+    print("----- END OF EDITING -----")
+else: paragraphs = translated_segments
 
 # ----- WRITING ----- #
+
+# Iterate over previously existing files and delete them one by one
+folder_path = output["path"]
+file_list = os.listdir(folder_path)
+for file_name in file_list:
+    file_path = os.path.join(folder_path, file_name)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
 
 # For .txt file
 if (output[".txt"]["enabled"]):
     file = open(f'{output["path"]}.txt', "w")
-    for i, segment in enumerate(finalized_segments):
-        if (i != 0):
-            file.write(f' {segment}')
-        else: file.write(segment)
-
+    separator = "\n\n" if models["editing"] else " "
+    for i, paragraph in enumerate(paragraphs):
+        if (i != 0): file.write(f'{separator}{paragraph}')
+        else: file.write(paragraph)
+        
 # For .pdf file
 
-# For metadata.json
+# For metadata json
+if (output[".json"]["enabled"]):
+    metadata = {
+        "segments": [],
+        "paragraphs": []
+    }
+    for i, segment in segments:
+        metadata["segments"].append({
+            "original": segment,
+            "translation": translated_segments[i],
+            "embedding": embeddings[i]
+        })
+    for paragraph in paragraphs:
+        metadata["paragraphs"].append(paragraph)
+    with open(f'{output["path"]}.json', "w") as json_file:
+        json.dump(metadata, json_file)

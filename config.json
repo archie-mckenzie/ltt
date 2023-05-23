@@ -5,7 +5,7 @@
     "models": {
         "translation": "gpt-3.5-turbo",
         "embedding": "text-embedding-ada-002",
-        "editing": ""
+        "editing": "gpt-3.5-turbo"
     },
     "prompts": {
         "system": "You are an expert translator who translates large texts broken up into small passages.",
@@ -14,7 +14,7 @@
         "translation_suffix": "",
         "queue_structured_context_injection": "Here's what came immediately before in the text you are translating:",
         "embedding_similarity_context_injection": "Similar passages previously found in the text you are translating:",
-        "editing_prompt": "Write the following passage with grammatical and formatting errors fixed. Add paragraph breaks, make sure quotation marks are in the right place, and so on. You must write the passage exactly as it is, aside from fixing the grammar issues. Passage:"
+        "editing": "Edit the following passage to fix grammatical and formatting errors. Add paragraph breaks as two newline chars, add or remove speech marks where necessary, and so on. You must write the passage exactly as it is, aside from fixing the grammar and formatting issues. Passage:"
     },
     "input": {
         "path": "./input/80_days_chapter_one",
@@ -25,7 +25,8 @@
             "max_segment_tokens": 350,
             "max_context_injection_tokens": 1050,
             "context_queue_size": 3,
-            "context_embedding_size": 1
+            "context_embedding_size": 1,
+            "max_editing_tokens": 850
         }
     },
     "output": {
@@ -36,7 +37,7 @@
         ".pdf": {
             "enabled": false
         },
-        "metadata": {
+        ".json": {
             "enabled": false
         }
     },
@@ -46,6 +47,8 @@
     },
     "advanced": {
         "outlier_threshold": 2,
-        "minimum_similarity": 0.75
+        "minimum_similarity": 0.75,
+        "translation_**kwargs": {},
+        "editing_**kwargs": {}
     }
 }
