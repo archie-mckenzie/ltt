@@ -19,16 +19,16 @@ def get_final_approval(segments, models, options):
 
 # ----- ESTIMATE COSTS ----- #
 
+cost_menu = {
+    "gpt-4-32k": (0.12 / 1000),
+    "gpt-4": (0.06 / 1000),
+    "gpt-3.5-turbo": (0.002 / 1000),
+    "text-embedding-ada-002": (0.0004 / 1000)
+}
+
 def estimate_costs(segments, models, options):
 
     total_costs = 0
-
-    cost_menu = {
-        "gpt-4-32k": (0.12 / 1000),
-        "gpt-4": (0.06 / 1000),
-        "gpt-3.5-turbo": (0.002 / 1000),
-        "text-embedding-ada-002": (0.0004 / 1000)
-    }
 
     print("\nEstimating costs...")
 
@@ -105,3 +105,5 @@ def estimate_timing(segments, models, options):
     except KeyError: pass
 
     return convert_to_human_time(t)
+
+#

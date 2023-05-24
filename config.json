@@ -44,10 +44,6 @@
             "name": "output"
         }
     },
-    "costs": {
-        "notification_interval": 1,
-        "max_cost_cap": 100
-    },
     "advanced": {
         "outlier_threshold": 2,
         "minimum_similarity": 0.75,
