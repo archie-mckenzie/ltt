@@ -47,7 +47,7 @@ from datetime import datetime
 import numpy as np
 
 # ./scripts
-from scripts import calculate_costs, read_input, segment_text
+from scripts import get_metrics, read_input, segment_text
 
 # ----- READ THE TEXT ----- #
 
@@ -62,7 +62,11 @@ print(sentences[0:2])
 print(segments[0:2])
 print(segment_tokens[0:2])
 
-projected_costs = calculate_costs.estimate_costs(segments, models, options)
+if (get_metrics.get_final_approval(segments, models, options)):
+    print()
+else:
+    print("Halted! No action has been taken")
+    exit()
 
 # ----- TRANSLATION HELPER FUNCTIONS ----- #
 
@@ -126,14 +130,20 @@ def formulate_prompt(i):
     
     return prompt if prompts["initial"] == "" else f'{prompts["initial"]}\n\n{prompt}'
 
+# ----- TIME ----- #
+
+start_time = time.time()
     
 # ----- EMBEDDING ----- #
 
 if (models["embedding"]):
     embeddings = []
-    print("----- START OF SEGMENT EMBEDDING -----")
+    print("----- START OF SEGMENT EMBEDDING -----") 
     for i, segment in enumerate(segments):
-        embeddings.append(retry_until_successful(2, openai.Embedding.create, model=models["embedding"], input=segment)["data"][0]["embedding"])
+        if len(advanced["embedding_kwargs"]) == 0:
+            embeddings.append(retry_until_successful(2, openai.Embedding.create, model=models["embedding"], input=segment)["data"][0]["embedding"])
+        else:
+            embeddings.append(retry_until_successful(2, openai.Embedding.create, model=models["embedding"], input=segment, **advanced["embedding_kwargs"])["data"][0]["embedding"])
         print(f"Embedded segment {i + 1}/{len(segments)}")
     print("----- END OF SEGMENT EMBEDDING -----")
 
@@ -141,7 +151,7 @@ if (models["embedding"]):
 
 translated_segments = []
 
-start_time = time.time()
+translation_time = time.time()
 
 print("----- START OF TRANSLATION -----")
 for i, segment in enumerate(segments):
@@ -149,13 +159,16 @@ for i, segment in enumerate(segments):
         {"role": "system", "content": prompts["system"]},
         {"role": "user", "content": formulate_prompt(i)}
     ]
-    translation = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages)["choices"][0]["message"]["content"]
+    if len(advanced["translation_kwargs"]) == 0:
+        translation = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages)["choices"][0]["message"]["content"]
+    else:
+        translation = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages, **advanced["translation_kwargs"])["choices"][0]["message"]["content"]
     translated_segments.append(translation)
     print("-----")
     print(translation + "\n")
     print(datetime.now().strftime("%H:%M:%S"))
-    print(f"{str(i + 1)}/{str(len(segments))}")
-    print(guess_time_remaining(start_time, i, len(segments)))
+    print(f"{i + 1}/{len(segments)}")
+    print(guess_time_remaining(translation_time, i, len(segments)))
     print("-----")
 print("----- END OF TRANSLATION -----")
 
@@ -163,7 +176,7 @@ print("----- END OF TRANSLATION -----")
 
 paragraphs = []
 
-start_time = time.time()
+editing_time = time.time()
 
 # Feed many translated segments at once into it (as many as the limit allows), ask it to use double newlines to denote new paragraphs
 # Split the model output along double newlines and store it in paragraphs
@@ -175,6 +188,7 @@ if (models["editing"]):
     current_prompt = f'{prompts["editing"]}\n\n'
     current_tokens = 0
     while i <= len(translated_segments) - 1:
+        print(f"{paragraphs}, {i}")
         if len(paragraphs) > 1:
             current_prompt += f'{paragraphs[len(paragraphs) - 1]}\n\n'
             current_tokens += len(enc.encode(paragraphs[len(paragraphs) - 1]))
@@ -189,38 +203,38 @@ if (models["editing"]):
             current_tokens += len(enc.encode(translated_segments[i]))
             i += 1
             if i >= len(translated_segments) - 1: break
+        
         print(f'Current tokens: {current_tokens}')
+        print("-----")
+        print(current_prompt)
+        print("-----")
         messages = [
             {"role": "system", "content": prompts["system"]},
             {"role": "user", "content": current_prompt}
         ]
-        print("-----")
-        print(current_prompt)
-        print("-----")
-        edit = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages)["choices"][0]["message"]["content"]
+        if (len(advanced["editing_kwargs"])) == 0:
+            edit = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages)["choices"][0]["message"]["content"]
+        else:
+            edit = retry_until_successful(2, openai.ChatCompletion.create, model=models["translation"], messages=messages, **advanced["editing_kwargs"])["choices"][0]["message"]["content"]
         for j, paragraph in enumerate(edit.split('\n\n')):
             if (j != 0): print(f'\n{paragraph}')
             else: print(paragraph)
             paragraphs.append(paragraph)
         current_prompt = f'{prompts["editing"]}\n\n'
         current_tokens = 0
+        """
         print("-----")
         print(datetime.now().strftime("%H:%M:%S"))
-        print(f"{str(i)}/{str(len(segments))}")
-        print(guess_time_remaining(start_time, i - 1, len(translated_segments)))
+        print(f"{i}/{len(segments)}")
+        print(guess_time_remaining(editing_time, i - 1, len(translated_segments)))
         print("-----")
+        """
     print("----- END OF EDITING -----")
 else: paragraphs = translated_segments
 
-# ----- WRITING ----- #
+print(f"Total time elapsed: {get_metrics.convert_to_human_time(time.time() - start_time)}")
 
-# Iterate over previously existing files and delete them one by one
-folder_path = output["path"]
-file_list = os.listdir(folder_path)
-for file_name in file_list:
-    file_path = os.path.join(folder_path, file_name)
-    if os.path.isfile(file_path):
-        os.remove(file_path)
+# ----- WRITING ----- #
 
 # For .txt file
 if (output[".txt"]["enabled"]):

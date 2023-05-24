@@ -26,7 +26,7 @@
             "max_context_injection_tokens": 1050,
             "context_queue_size": 3,
             "context_embedding_size": 1,
-            "max_editing_tokens": 850
+            "max_editing_tokens": 650
         }
     },
     "output": {
@@ -48,7 +48,8 @@
     "advanced": {
         "outlier_threshold": 2,
         "minimum_similarity": 0.75,
-        "translation_**kwargs": {},
-        "editing_**kwargs": {}
+        "translation_kwargs": {},
+        "embedding_kwargs": {},
+        "editing_kwargs": {}
     }
 }

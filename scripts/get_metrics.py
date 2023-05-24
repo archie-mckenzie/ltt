@@ -8,13 +8,14 @@
 import tiktoken
 enc = tiktoken.get_encoding("cl100k_base")
 
-# ----- CALCULATE COSTS ----- #
+# ----- GET FINAL APPROVAL ----- #
 
-def calculate_tokens_in_messages(messages):
-    total = 0
-    for message in messages:
-        total += len(enc.encode(message["content"]))
-    return total
+def get_final_approval(segments, models, options):
+    print(f"Total Cost: ${estimate_costs(segments, models, options)}")
+    print(f"Estimated Time: {estimate_timing(segments, models, options)}")
+    if input("Approve? (y/n) ") == 'n':
+        return False
+    return True
 
 # ----- ESTIMATE COSTS ----- #
 
@@ -64,10 +65,43 @@ def estimate_costs(segments, models, options):
     print(f"Editing: ${editing_costs}")
     total_costs += editing_costs
 
-    print(f"Total Cost: ${total_costs}")
-    if input("Approve? (y/n) ") == 'n':
-        print("Halted! No action has been taken")
-        exit()
-    
-    print()
-    return total_costs
+    return round(total_costs, 3)
+
+# ----- ESTIMATE TIMING ----- #
+
+def convert_to_human_time(t):
+    hours = int(t // 3600)
+    minutes = int((t % 3600) // 60)
+    seconds = int(t % 60)
+    return f"{hours}h {minutes}m {seconds}s"
+
+def estimate_timing(segments, models, options):
+
+    t = 0
+
+    timing_menu = { # empirically determined in testing
+        "gpt-4-32k": (39 / 1000),
+        "gpt-4": (39 / 1000),
+        "gpt-3.5-turbo": (22 / 1000), 
+        "text-embedding-ada-002": (0.4 / 100)
+    }
+
+    # Estimating Timing for Translation
+    try:
+        for segment in segments:
+            t += (timing_menu[models["translation"]] * (len(enc.encode(segment)) + options["max_context_injection_tokens"]))
+    except KeyError: pass
+
+    # Estimating Timing for Embedding
+    try:
+        for segment in segments:
+            t += (timing_menu[models["embedding"]] * len(enc.encode(segment)))
+    except KeyError: pass
+
+    # Estimating Timing for Editing
+    try:
+        for segment in segments:
+            t += (timing_menu[models["editing"]] * len(enc.encode(segment)))
+    except KeyError: pass
+
+    return convert_to_human_time(t)
