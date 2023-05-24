@@ -181,7 +181,6 @@ editing_time = time.time()
 # Feed many translated segments at once into it (as many as the limit allows), ask it to use double newlines to denote new paragraphs
 # Split the model output along double newlines and store it in paragraphs
 # Integrate the last paragraph into the next prompt so that all inter-segment gaps are joined
-
 if (models["editing"]):
     print("----- START OF EDITING -----")
     i = 0
@@ -222,13 +221,11 @@ if (models["editing"]):
             paragraphs.append(paragraph)
         current_prompt = f'{prompts["editing"]}\n\n'
         current_tokens = 0
-        """
         print("-----")
         print(datetime.now().strftime("%H:%M:%S"))
         print(f"{i}/{len(segments)}")
         print(guess_time_remaining(editing_time, i - 1, len(translated_segments)))
         print("-----")
-        """
     print("----- END OF EDITING -----")
 else: paragraphs = translated_segments
 
@@ -238,13 +235,14 @@ print(f"Total time elapsed: {get_metrics.convert_to_human_time(time.time() - sta
 
 # For .txt file
 if (output[".txt"]["enabled"]):
-    file = open(f'{output["path"]}.txt', "w")
+    file = open(f'{output["path"]}{output[".txt"]["name"]}.txt', "w")
     separator = "\n\n" if models["editing"] else " "
     for i, paragraph in enumerate(paragraphs):
         if (i != 0): file.write(f'{separator}{paragraph}')
         else: file.write(paragraph)
-        
+
 # For .pdf file
+# Write a separate script
 
 # For metadata json
 if (output[".json"]["enabled"]):
@@ -260,5 +258,5 @@ if (output[".json"]["enabled"]):
         })
     for paragraph in paragraphs:
         metadata["paragraphs"].append(paragraph)
-    with open(f'{output["path"]}.json', "w") as json_file:
+    with open(f'{output["path"]}{output[".json"]["name"]}.json', "w") as json_file:
         json.dump(metadata, json_file)
